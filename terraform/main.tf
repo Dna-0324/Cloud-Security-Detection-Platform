@@ -40,6 +40,26 @@ resource "aws_internet_gateway" "gw" {
   }
 }
 
+# --- Route Table pour Subnet Public ---
+resource "aws_route_table" "public_rt" {
+  vpc_id = aws_vpc.main.id
+
+  route {
+    cidr_block = "0.0.0.0/0"
+    gateway_id = aws_internet_gateway.gw.id
+  }
+
+  tags = {
+    Name = "cloud-sec-public-rt"
+  }
+}
+
+# --- Association de la Route Table au Subnet Public ---
+resource "aws_route_table_association" "public_assoc" {
+  subnet_id      = aws_subnet.public.id
+  route_table_id = aws_route_table.public_rt.id
+}
+
 # --- Security Group ---
 resource "aws_security_group" "ssh" {
   name        = "cloud-sec-sg"
@@ -51,7 +71,7 @@ resource "aws_security_group" "ssh" {
     from_port   = 22
     to_port     = 22
     protocol    = "tcp"
-    cidr_blocks = ["78.242.171.139/32"] # ← remplace par ton IP publique
+    cidr_blocks = ["37.165.188.253/32"] # ← remplace par ton IP publique
   }
 
   egress {
@@ -77,7 +97,7 @@ resource "aws_instance" "web" {
   ami                         = "ami-0e2de80e7636c4837" # Amazon Linux 2023, us-west-1
   instance_type               = "t2.micro"
   subnet_id                   = aws_subnet.public.id
-  key_name                    = "cloud-sec-key" # ← ton key pair
+  key_name                    = "cloud-sec-key"
   vpc_security_group_ids      = [aws_security_group.ssh.id]
   associate_public_ip_address = true
 

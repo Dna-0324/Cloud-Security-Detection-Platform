@@ -3,3 +3,18 @@ terraform/.terraform/
 terraform/*.tfstate
 terraform/*.tfstate.backup
 *.pem
+
+# Ansible
+*.retry
+.ansible/
+ansible/*.retry
+
+# Python
+__pycache__/
+*.pyc
+
+# Environment
+.env
+
+# Logs
+*.log

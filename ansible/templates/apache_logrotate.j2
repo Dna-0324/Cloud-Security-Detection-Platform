@@ -1,0 +1,12 @@
+/var/log/httpd/*log {
+    daily
+    missingok
+    rotate 14
+    compress
+    notifempty
+    create 0640 root adm
+    sharedscripts
+    postrotate
+        systemctl reload httpd > /dev/null 2>/dev/null || true
+    endscript
+}

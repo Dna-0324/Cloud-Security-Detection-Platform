@@ -2,15 +2,13 @@
 - name: Déploiement complet Cloud-Security-Detection-Platform
   hosts: aws
   become: yes
-  gather_facts: yes
-  collections:
-    - amazon.aws
   vars:
     cloud_scripts_src: "/cloudlab/scripts/"
     cloud_scripts_dest: "/opt/cloud-scripts"
     apache_logrotate_template: "/cloudlab/ansible/templates/apache_logrotate.j2"
     cloudwatch_sns_topic_arn: "arn:aws:sns:us-west-1:798329741052:cloud-sec-alerts"
     cloudtrail_bucket_name: "cloudtrail-logs-798329741052"
+    cloudtrail_role_name: "CloudSecDetectionRole"
 
   tasks:
     # --- Mise à jour des paquets ---
@@ -51,11 +49,12 @@
     # --- Déploiement des scripts de détection ---
     - name: Copier les scripts sur l'EC2
       ansible.builtin.copy:
-        src: "{{ cloud_scripts_src }}"
-        dest: "{{ cloud_scripts_dest }}"
+        src: "{{ cloud_scripts_src }}/"
+        dest: "{{ cloud_scripts_dest }}/"
         owner: ec2-user
         group: ec2-user
         mode: '0755'
+        remote_src: no
 
     # --- Configuration de la rotation des logs Apache ---
     - name: Configurer logrotate pour Apache
@@ -68,74 +67,53 @@
 
     # --- Configuration des alertes CloudWatch ---
     - name: Créer une alarme CloudWatch pour erreurs Apache
-      amazon.aws.cloudwatch_metric_alarm:
-        name: "ApacheErrors"
-        metric: "4xxError"
-        namespace: "AWS/Logs"
-        statistic: Sum
-        period: 300
-        threshold: 5
-        comparison: GreaterThanThreshold
-        evaluation_periods: 1
-        alarm_actions:
-          - "{{ cloudwatch_sns_topic_arn }}"
+      ansible.builtin.command: >
+        aws cloudwatch put-metric-alarm
+        --alarm-name "ApacheErrors"
+        --metric-name "4xxError"
+        --namespace "AWS/Logs"
+        --statistic Sum
+        --period 300
+        --threshold 5
+        --comparison-operator GreaterThanThreshold
+        --evaluation-periods 1
+        --alarm-actions {{ cloudwatch_sns_topic_arn }}
+        --region us-west-1
 
-    # --- Configuration CloudTrail ---
+    # --- Vérifier que le bucket CloudTrail existe ---
     - name: Vérifier que le bucket CloudTrail existe
-      amazon.aws.aws_s3_bucket_info:
-        bucket: "{{ cloudtrail_bucket_name }}"
+      amazon.aws.s3_bucket_info:
+        name: "{{ cloudtrail_bucket_name }}"
+        region: us-west-1
       register: bucket_info
       ignore_errors: yes
 
+    # --- Créer le bucket S3 pour CloudTrail si nécessaire ---
     - name: Créer le bucket S3 pour CloudTrail si nécessaire
-      amazon.aws.aws_s3:
-        bucket: "{{ cloudtrail_bucket_name }}"
+      amazon.aws.s3_bucket:
+        name: "{{ cloudtrail_bucket_name }}"
         acl: private
+        region: us-west-1
         versioning: yes
         encryption: AES256
-      when: bucket_info.buckets | length == 0
+      when: bucket_info.buckets is not defined or bucket_info.buckets | length == 0
 
+    # --- Activer CloudTrail ---
     - name: Activer CloudTrail
       amazon.aws.cloudtrail:
         name: "cloud-sec-trail"
         s3_bucket_name: "{{ cloudtrail_bucket_name }}"
-        include_global_service_events: true
-        is_multi_region_trail: true
-        enable_log_file_validation: true
+        include_global_service_events: yes
+        is_multi_region_trail: yes
+        enable_log_file_validation: yes
+        region: us-west-1
 
     # --- Configurer CloudWatch Logs pour CloudTrail ---
     - name: Créer un groupe CloudWatch Logs pour CloudTrail
       amazon.aws.cloudwatchlogs_log_group:
-        name: "/aws/cloudtrail/cloud-sec-trail"
-        retention_in_days: 90
+        log_group_name: "/aws/cloudtrail/cloud-sec-trail"
+        retention: 90
+        region: us-west-1
 
-    - name: Attacher rôle IAM CloudTrail -> CloudWatch
-      amazon.aws.iam_role:
-        name: cloudtrail-cloudwatch-role
-        assume_role_policy_document: |
-          {
-            "Version": "2012-10-17",
-            "Statement": [
-              {
-                "Action": "sts:AssumeRole",
-                "Effect": "Allow",
-                "Principal": {"Service": "cloudtrail.amazonaws.com"}
-              }
-            ]
-          }
-
-    - name: Attacher la politique CloudWatchLogsFullAccess au rôle CloudTrail
-  amazon.aws.iam_policy_attachment:
-    name: cloudtrail-cloudwatch-attach
-    policy_arn: arn:aws:iam::aws:policy/CloudWatchLogsFullAccess
-    users: []
-    groups: []
-    roles:
-      - cloudtrail-cloudwatch-role
-
-    - name: Créer VPC Flow Logs pour le VPC
-      amazon.aws.ec2_vpc_flow_log:
-        vpc_id: "{{ lookup('amazon.aws.aws_vpc', 'cloud-sec-vpc', region='us-west-1') }}"
-        iam_role_arn: "{{ lookup('amazon.aws.aws_iam_role', 'cloudtrail-cloudwatch-role', region='us-west-1') }}"
-        log_destination_type: cloud-watch-logs
-        traffic_type: ALL
+    # --- IAM Role CloudSecDetectionRole déjà attaché à l'EC2 via Terraform ---
+    # Plus besoin de recréer ni attacher le rôle pour VPC Flow Logs ici

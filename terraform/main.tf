@@ -71,7 +71,7 @@ resource "aws_security_group" "ssh" {
     from_port   = 22
     to_port     = 22
     protocol    = "tcp"
-    cidr_blocks = ["78.243.176.159/32"] # ← remplace par ton IP publique
+    cidr_blocks = ["37.165.188.253/32"] # ← remplace par ton IP publique
   }
 
   egress {
@@ -189,22 +189,23 @@ resource "aws_cloudwatch_log_group" "cloudtrail_log_group" {
 }
 
 # --- IAM Role pour CloudTrail -> CloudWatch ---
-resource "aws_iam_role" "CloudSecDetectionRole" {
-  name = "CloudSecDetectionRole"
+resource "aws_iam_role" "cloudtrail_cloudwatch_role" {
+  name = "cloudtrail-cloudwatch-role"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
     Statement = [{
-      Effect = "Allow"
+      Action    = "sts:AssumeRole"
+      Effect    = "Allow"
       Principal = {
-        Service = "vpc-flow-logs.amazonaws.com"
+        Service = "cloudtrail.amazonaws.com"
       }
-      Action = "sts:AssumeRole"
     }]
   })
 }
+
 resource "aws_iam_role_policy_attachment" "cloudtrail_cloudwatch_attach" {
-  role       = aws_iam_role.CloudSecDetectionRole.name
+  role       = aws_iam_role.cloudtrail_cloudwatch_role.name
   policy_arn = "arn:aws:iam::aws:policy/CloudWatchLogsFullAccess"
 }
 
@@ -214,5 +215,5 @@ resource "aws_flow_log" "vpc_flow_log" {
   log_destination_type = "cloud-watch-logs"
   traffic_type         = "ALL"
   vpc_id               = aws_vpc.main.id
-  iam_role_arn         = aws_iam_role.CloudSecDetectionRole.arn
+  iam_role_arn         = aws_iam_role.cloudtrail_cloudwatch_role.arn
 }

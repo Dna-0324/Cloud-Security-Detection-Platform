@@ -1,0 +1,29 @@
+version: '3.8'
+
+services:
+  cloudlab:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: cloud-security-lab
+    stdin_open: true
+    tty: true
+
+    volumes:
+      # Monter les credentials AWS depuis la machine hôte
+      - ~/.aws:/root/.aws:ro
+      # Monter la clé SSH pour se connecter à l'EC2
+      - ~/.ssh:/root/.ssh:ro
+      # Monter le projet pour éditer les fichiers depuis l'hôte
+      - ./terraform:/cloudlab/terraform
+      - ./ansible:/cloudlab/ansible
+      - ./scripts:/cloudlab/scripts
+
+    environment:
+      - AWS_DEFAULT_REGION=us-west-1
+      - TF_VAR_region=us-west-1
+
+    working_dir: /cloudlab
+
+    # Garder le container actif
+    command: /bin/bash

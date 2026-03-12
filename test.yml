@@ -106,26 +106,21 @@
         name: "/aws/cloudtrail/cloud-sec-trail"
         retention_in_days: 90
 
-        # --- IAM Role pour CloudTrail ---
-
-    - name: Créer rôle IAM CloudTrail avec policy attachée
+    - name: Attacher rôle IAM CloudTrail -> CloudWatch
       amazon.aws.iam_role:
-        name: "{{ cloudtrail_role_name }}"
-        state: present
-        assume_role_policy_document: >
+        name: cloudtrail-cloudwatch-role
+        assume_role_policy_document: |
           {
             "Version": "2012-10-17",
             "Statement": [
               {
+                "Action": "sts:AssumeRole",
                 "Effect": "Allow",
-                "Principal": { "Service": "cloudtrail.amazonaws.com" },
-                "Action": "sts:AssumeRole"
+                "Principal": {"Service": "cloudtrail.amazonaws.com"}
               }
             ]
           }
-        managed_policies:
-          - arn:aws:iam::aws:policy/CloudWatchLogsFullAccess
-      delegate_to: localhost
+
     - name: Attacher la politique CloudWatchLogsFullAccess au rôle CloudTrail
       amazon.aws.iam_role_policy_attachment:
         role: cloudtrail-cloudwatch-role

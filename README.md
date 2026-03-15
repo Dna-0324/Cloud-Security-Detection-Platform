@@ -1,138 +1,245 @@
-# Cloud Security Detection Platform
+# 🛡️ Cloud Security Detection Platform
 
 ## Sommaire
 
 1. [Description du projet](#description-du-projet)
-2. [Pourquoi Docker ?](#pourquoi-docker)
-3. [Phase 1 – Infrastructure Setup](#phase-1--infrastructure-setup)
-4. [Phase 2 – Configuration et automatisation](#phase-2--configuration-et-automatisation)
-5. [Scripts de détection et alertes](#scripts-de-détection-et-alertes)
-6. [Objectifs pédagogiques](#objectifs-pédagogiques)
-7. [Instructions pour lancer les scripts](#instructions-pour-lancer-les-scripts)
+2. [Architecture](#architecture)
+3. [Pourquoi Docker ?](#pourquoi-docker)
+4. [Phase 1 – Infrastructure Setup](#phase-1--infrastructure-setup)
+5. [Phase 2 – Configuration et automatisation](#phase-2--configuration-et-automatisation)
+6. [Phase 3 – Threat Intelligence](#phase-3--threat-intelligence)
+7. [Phase 4 – Attack Simulation](#phase-4--attack-simulation)
+8. [Phase 5 – Grafana Dashboard](#phase-5--grafana-dashboard)
+9. [Objectifs pédagogiques](#objectifs-pédagogiques)
+10. [Instructions pour lancer le lab](#instructions-pour-lancer-le-lab)
 
 ---
 
 ## Description du projet
 
-Le projet **Cloud Security Detection Platform** a pour objectif de créer un laboratoire pratique de sécurité cloud sur AWS. Il permet de :
+Le projet **Cloud Security Detection Platform** est un laboratoire pratique de sécurité cloud sur AWS. Il simule un environnement SOC (Security Operations Center) réel permettant de :
 
-* Déployer une infrastructure sécurisée dans AWS (VPC, Subnets, EC2, Security Groups).
+* Déployer une infrastructure sécurisée sur AWS (VPC, Subnets, EC2, Security Groups) via Terraform.
 * Collecter et centraliser les logs cloud via CloudTrail, VPC Flow Logs et CloudWatch.
-* Expérimenter la détection des menaces et l’ingénierie des règles de sécurité (Blue Team).
-* Automatiser l’infrastructure avec Terraform et la configuration avec Ansible.
-* Déployer des scripts pour la détection et la gestion des alertes.
+* Détecter les menaces et enrichir les données avec de la Threat Intelligence (AbuseIPDB, VirusTotal).
+* Simuler des attaques réelles (brute force SSH, port scanning, flood HTTP).
+* Automatiser l'infrastructure avec Terraform et la configuration avec Ansible.
+* Visualiser les métriques de sécurité en temps réel avec Grafana.
 * Envoyer des alertes vers AWS SNS pour les IPs suspectes.
-* Enrichir les données avec de l’intelligence sur les menaces pour la surveillance et les rapports.
 
-Ce projet est conçu pour apprendre la sécurité cloud, l’automatisation et la mise en place de bonnes pratiques de monitoring sur AWS.
+---
+
+## Architecture
+```
+┌─────────────────────────────────────────────────────┐
+│                   Docker Container                   │
+│         Terraform │ Ansible │ AWS CLI │ Bash         │
+└──────────────────────┬──────────────────────────────┘
+                       │
+                       ▼
+┌─────────────────────────────────────────────────────┐
+│                      AWS Cloud                       │
+│                                                      │
+│  VPC (10.0.0.0/16)                                   │
+│  ├── Subnet Public (10.0.1.0/24)                     │
+│  │   └── EC2 (Amazon Linux 2023) ← Ansible           │
+│  ├── Security Group (SSH restreint)                  │
+│  ├── Internet Gateway + Route Table                  │
+│  └── Elastic IP                                      │
+│                                                      │
+│  Logging & Monitoring                                │
+│  ├── CloudTrail (multi-région) → S3                  │
+│  ├── VPC Flow Logs → CloudWatch                      │
+│  └── CloudWatch Alarms → SNS → Email                 │
+└─────────────────────────────────────────────────────┘
+                       │
+                       ▼
+┌─────────────────────────────────────────────────────┐
+│              Security Detection Pipeline             │
+│                                                      │
+│  attack-simulation/ → génère du trafic suspect       │
+│       ↓                                              │
+│  scripts/ → détecte les menaces                      │
+│       ↓                                              │
+│  threat-intelligence/ → enrichit les IPs             │
+│       ↓                                              │
+│  Grafana → visualise en temps réel                   │
+│       ↓                                              │
+│  SNS → envoie les alertes email                      │
+└─────────────────────────────────────────────────────┘
+```
 
 ---
 
 ## Pourquoi Docker ?
 
-Tout le travail se fait dans un conteneur Docker, pour :
+Tout le travail se fait dans un conteneur Docker, pour :
 
-* Fournir un environnement isolé et reproductible, identique pour tous les développeurs.
+* Fournir un environnement isolé et reproductible.
 * Éviter les conflits de dépendances avec le système hôte.
-* Faciliter l’installation et l’usage d’outils comme Terraform, Ansible et AWS CLI sans polluer votre machine locale.
-* Permettre de déployer rapidement un environnement complet de laboratoire cloud pour les tests et la pratique.
+* Faciliter l'installation de Terraform, Ansible et AWS CLI.
+* Permettre de déployer rapidement un environnement complet.
 
-Le conteneur contient :
-
+Le conteneur contient :
 * Terraform (Infrastructure as Code)
 * Ansible (configuration et déploiement)
 * AWS CLI (interagir avec AWS)
-* Bash et utilitaires de base pour les scripts de détection
+* Bash et Python3
 
 ---
 
 ## Phase 1 – Infrastructure Setup
 
-* VPC créé
-* Subnet public configuré
-* Internet Gateway attachée
-* EC2 déployée (Amazon Linux 2023)
-* Security Group renforcé (SSH restreint à l’IP personnelle)
-* Adresse IP élastique associée
-* Bucket S3 pour CloudTrail configuré (versioning et chiffrement)
-* CloudTrail activé et multi-région
-* CloudWatch Log Group configuré pour les logs CloudTrail
-* Rôle IAM CloudTrail → CloudWatch attaché
-* VPC Flow Logs configurés
+**Région :** us-west-1 (California North)
 
-**Région :** us-west-1 (California North)
+| Ressource | Détail |
+|---|---|
+| VPC | 10.0.0.0/16 |
+| Subnet public | 10.0.1.0/24 |
+| Internet Gateway | Attachée au VPC |
+| EC2 | Amazon Linux 2023, t2.micro |
+| Security Group | SSH restreint à l'IP personnelle |
+| Elastic IP | Associée à l'EC2 |
+| S3 Bucket | CloudTrail logs (versioning + chiffrement AES256) |
+| CloudTrail | Activé multi-région |
+| CloudWatch | Log Group + Alarmes |
+| IAM Role | CloudTrail → CloudWatch |
+| VPC Flow Logs | Trafic ALL → CloudWatch |
 
 ---
 
 ## Phase 2 – Configuration et automatisation
 
-* Installation d’Apache sur l’EC2 via Ansible
+Configuration de l'EC2 via Ansible :
+
+* Installation d'Apache
 * Configuration de la rotation des logs Apache
-* Création de répertoires pour logs et scripts (`/opt/cloud-scripts/`, `/var/log/cloud-scripts/`)
-* Déploiement des scripts de détection et d’analyse de logs
+* Création des répertoires `/opt/cloud-scripts/` et `/var/log/cloud-scripts/`
+* Déploiement des scripts de détection
 
-### Scripts déployés
+### Scripts de détection
 
-| Script                | Fonction                                     |
-| --------------------- | -------------------------------------------- |
-| `test_cloudtrail.sh`  | Vérifie la lecture des logs CloudTrail       |
-| `test_flowlogs.sh`    | Lit et analyse les VPC Flow Logs             |
-| `detect_attackers.sh` | Détecte les IP suspectes et les enregistre   |
-| `detect_port_scan.sh` | Identifie les tentatives de port scanning    |
-| `alerts_sns.sh`       | Envoie des alertes SNS pour les IP suspectes |
+| Script | Fonction |
+|---|---|
+| `test_cloudtrail.sh` | Vérifie la lecture des logs CloudTrail |
+| `test_flowlogs.sh` | Lit et analyse les VPC Flow Logs |
+| `detect_attackers.sh` | Détecte les IPs suspectes |
+| `detect_port_scan.sh` | Identifie les tentatives de port scanning |
+| `alerts_sns.sh` | Envoie des alertes SNS pour les IPs suspectes |
 
-* Extraction et centralisation des IP suspectes dans `/var/log/cloud-scripts/detected_ips.txt`
-* Envoi d’alertes par email via SNS (`cloud-sec-alerts`) pour les IP suspectes
-* Configuration d’alarmes CloudWatch pour la surveillance des erreurs Apache
+---
+
+## Phase 3 – Threat Intelligence
+
+Enrichissement des IPs suspectes avec :
+
+* **AbuseIPDB** — score de confiance d'abus, nombre de rapports, pays
+* **VirusTotal** — détections malveillantes et suspectes
+
+### Niveaux de menace
+
+| Niveau | Critère |
+|---|---|
+| 🔴 CRITIQUE | AbuseScore ≥ 80% ou VT Malicious ≥ 5 |
+| 🟠 ÉLEVÉ | AbuseScore ≥ 50% ou VT Malicious ≥ 2 |
+| 🟡 MOYEN | AbuseScore ≥ 20% ou VT Malicious ≥ 1 |
+| 🟢 FAIBLE | En dessous des seuils |
+
+Scripts :
+* `enrich_ips.sh` — interroge les APIs et génère un rapport JSON
+* `threat_report.py` — génère un rapport HTML visuel
+
+---
+
+## Phase 4 – Attack Simulation
+
+Scripts pour simuler des attaques sur le lab :
+
+| Script | Type d'attaque |
+|---|---|
+| `simulate_bruteforce.sh` | Brute force SSH (20 tentatives) |
+| `simulate_port_scan.sh` | Scan des 100 ports principaux via nmap |
+| `simulate_ddos.sh` | Flood HTTP (50 requêtes concurrentes) |
+
+⚠️ Ces scripts sont uniquement destinés à un usage dans ce lab personnel.
+
+---
+
+## Phase 5 – Grafana Dashboard
+
+Visualisation en temps réel des métriques de sécurité :
+
+* Nombre d'IPs suspectes détectées
+* Score de menace moyen
+* Carte géographique des attaquants
+* Historique des alertes SNS
+* Trafic VPC Flow Logs
 
 ---
 
 ## Objectifs pédagogiques
 
-* Hands-on **AWS Cloud Security Detection Lab** focused on:
-
-  * Blue Team detection engineering
-  * Threat Intelligence enrichment
-  * Cloud-native logging (CloudTrail, VPC Flow Logs, CloudWatch)
-  * Terraform Infrastructure as Code
-  * Ansible configuration management
-  * Expérimentation dans un environnement Docker pour plus de sécurité et de reproductibilité
+* **Blue Team** detection engineering
+* **Threat Intelligence** enrichment
+* **Cloud-native logging** (CloudTrail, VPC Flow Logs, CloudWatch)
+* **Terraform** Infrastructure as Code
+* **Ansible** configuration management
+* **Docker** environnement reproductible
+* **Grafana** visualisation et monitoring
 
 ---
 
-## Instructions pour lancer les scripts
+## Instructions pour lancer le lab
 
-1. Vérifier que les logs CloudTrail et VPC Flow Logs sont présents :
+### 1. Prérequis
+* Docker Desktop installé
+* Compte AWS avec clés d'accès configurées
+* Clé SSH `cloud-sec-key.pem`
 
+### 2. Lancer le conteneur Docker
+```bash
+docker run -it --name cloud-security-lab \
+  -v ~/.aws:/root/.aws:ro \
+  -v ./terraform:/cloudlab/terraform \
+  -v ./ansible:/cloudlab/ansible \
+  -v ./scripts:/cloudlab/scripts \
+  cloud-security-lab
+```
+
+### 3. Déployer l'infrastructure
+```bash
+cd /cloudlab/terraform
+terraform init
+terraform apply
+```
+
+### 4. Configurer l'EC2
+```bash
+ansible-playbook -i /cloudlab/ansible/inventory.ini /cloudlab/ansible/test.yml
+```
+
+### 5. Simuler des attaques
+```bash
+/cloudlab/attack-simulation/simulate_port_scan.sh
+/cloudlab/attack-simulation/simulate_bruteforce.sh
+/cloudlab/attack-simulation/simulate_ddos.sh
+```
+
+### 6. Détecter les menaces
 ```bash
 /opt/cloud-scripts/test_cloudtrail.sh
 /opt/cloud-scripts/test_flowlogs.sh
-```
-
-2. Extraire les IP suspectes :
-
-```bash
-grep -oE '([0-9]{1,3}\.){3}[0-9]{1,3}' /var/log/cloud-scripts/test_flowlogs.log | sort | uniq > /var/log/cloud-scripts/detected_ips.txt
-```
-
-3. Lancer la détection des attaquants et port scanning :
-
-```bash
 /opt/cloud-scripts/detect_attackers.sh
 /opt/cloud-scripts/detect_port_scan.sh
 ```
 
-4. Envoyer les alertes SNS aux adresses configurées :
+### 7. Enrichir avec Threat Intelligence
+```bash
+/cloudlab/threat-intelligence/enrich_ips.sh
+python3 /cloudlab/threat-intelligence/threat_report.py
+```
 
+### 8. Envoyer les alertes
 ```bash
 /opt/cloud-scripts/alerts_sns.sh
 ```
-
-5. Vérifier les IP détectées :
-
-```bash
-cat /var/log/cloud-scripts/detected_ips.txt
-```
-
----
-

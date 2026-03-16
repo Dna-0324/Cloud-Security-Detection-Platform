@@ -10,8 +10,9 @@
 6. [Phase 3 – Threat Intelligence](#phase-3--threat-intelligence)
 7. [Phase 4 – Attack Simulation](#phase-4--attack-simulation)
 8. [Phase 5 – Grafana Dashboard](#phase-5--grafana-dashboard)
-9. [Objectifs pédagogiques](#objectifs-pédagogiques)
-10. [Instructions pour lancer le lab](#instructions-pour-lancer-le-lab)
+9. [Phase 6 – Auto-Remediation SOAR](#phase-6--auto-remediation-soar)
+10. [Objectifs pédagogiques](#objectifs-pédagogiques)
+11. [Instructions pour lancer le lab](#instructions-pour-lancer-le-lab)
 
 ---
 
@@ -43,7 +44,7 @@ Le projet **Cloud Security Detection Platform** est un laboratoire pratique de s
 │  VPC (10.0.0.0/16)                                   │
 │  ├── Subnet Public (10.0.1.0/24)                     │
 │  │   └── EC2 (Amazon Linux 2023) ← Ansible           │
-│  ├── Security Group (SSH restreint)                  │
+│  ├── Security Group (SSH restreint) ←── SOAR AUTO    │
 │  ├── Internet Gateway + Route Table                  │
 │  └── Elastic IP                                      │
 │                                                      │
@@ -66,6 +67,19 @@ Le projet **Cloud Security Detection Platform** est un laboratoire pratique de s
 │  Grafana → visualise en temps réel                   │
 │       ↓                                              │
 │  SNS → envoie les alertes email                      │
+└─────────────────────────────────────────────────────┘
+                       │
+                       ▼
+┌─────────────────────────────────────────────────────┐
+│          Phase 6 — Auto-Remediation (SOAR)           │
+│                                                      │
+│  soar/auto_block.sh → vérifie le score Threat Intel  │
+│       ↓                                              │
+│  Score CRITIQUE ou AbuseScore ≥ 50%                  │
+│       ↓                                              │
+│  Blocage automatique → Security Group AWS            │
+│       ↓                                              │
+│  Email récapitulatif → SNS (1 seul mail)             │
 └─────────────────────────────────────────────────────┘
 ```
 
@@ -176,7 +190,33 @@ Visualisation en temps réel des métriques de sécurité :
 * Trafic VPC Flow Logs
 
 ---
+## Phase 6 – Auto-Remediation (SOAR)
 
+Blocage automatique des IPs critiques détectées :
+
+| Script | Fonction |
+|---|---|
+| `get_threat_info.py` | Récupère le score et niveau de menace depuis le rapport JSON |
+| `auto_block.sh` | Bloque automatiquement les IPs critiques dans le Security Group AWS |
+
+### Workflow SOAR
+
+1. `detect_attackers.sh` détecte les IPs suspectes
+2. `enrich_ips.sh` enrichit avec AbuseIPDB + VirusTotal
+3. `auto_block.sh` vérifie le score — si CRITIQUE ou score ≥ 50% → blocage automatique
+4. La règle est ajoutée dans le Security Group AWS (`IpProtocol: -1` = tout le trafic bloqué)
+5. Un email récapitulatif est envoyé via SNS avec toutes les IPs bloquées
+
+### Critères de blocage
+
+| Condition | Action |
+|---|---|
+| Niveau CRITIQUE | Blocage automatique |
+| AbuseScore ≥ 50% | Blocage automatique |
+| IP déjà bloquée | Ignorée (pas de doublon) |
+| Score insuffisant | Ignorée, alerte uniquement |
+
+---
 ## Objectifs pédagogiques
 
 * **Blue Team** detection engineering

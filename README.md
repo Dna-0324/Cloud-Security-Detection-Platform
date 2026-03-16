@@ -27,6 +27,7 @@ Le projet **Cloud Security Detection Platform** est un laboratoire pratique de s
 * Automatiser l'infrastructure avec Terraform et la configuration avec Ansible.
 * Visualiser les métriques de sécurité en temps réel avec Grafana.
 * Envoyer des alertes vers AWS SNS pour les IPs suspectes.
+* Bloquer automatiquement les IPs critiques via Auto-Remediation SOAR (Security Orchestration, Automation and Response).
 
 ---
 

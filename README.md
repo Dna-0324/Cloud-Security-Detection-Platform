@@ -285,6 +285,7 @@ python3 /cloudlab/threat-intelligence/threat_report.py
 /opt/cloud-scripts/alerts_sns.sh
 ```
 
-👩‍💻 Auteure
+## 👩‍💻 Auteure
 
-Noura Douvawissa — Étudiante en Master 1 Cybersécurité & Cloud Computing (IPSSI Lille) GitHub
+**Noura Douvawissa** — Étudiante en Master 1 Cybersécurité & Cloud Computing (IPSSI Lille)
+[GitHub](https://github.com/Dna-0324)
